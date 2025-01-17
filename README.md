@@ -4,3 +4,4 @@ This is a project to verify UID Aadhar Data using AI developed during Infosys Sp
 
 The below flowchart shows how the application works
 
+flowchart.jpeg
