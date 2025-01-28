@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aadhaar Verification Advanced Analytics</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --primary-color: #2c3e50;
+        --secondary-color: #3498db;
+        --success-color: #27ae60;
+        --warning-color: #f39c12;
+        --bg-light: #f4f6f7;
+      }
+      body {
+        background-color: var(--bg-light);
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      }
+      .chart-container {
+        height: 350px;
+        margin-bottom: 30px;
+        position: relative;
+      }
+      .info-card {
+        transition: transform 0.3s, box-shadow 0.3s;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+      .info-card:hover {
+        transform: scale(1.05);
+        box-shadow: 0 8px 12px rgba(0, 0, 0, 0.15);
+      }
+      .card-title {
+        font-weight: 600;
+        opacity: 0.8;
+      }
+      .table > tbody > tr > td {
+        vertical-align: middle;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container-fluid mt-4 px-4">
+      <h1 class="text-center mb-4 text-primary">
+        Aadhaar Verification Advanced Analytics Dashboard
+      </h1>
+
+      <!-- Summary Statistics Row -->
+      <div class="row mb-4 g-4">
+        <div class="col-md-3">
+          <div class="card info-card bg-primary text-white">
+            <div class="card-body">
+              <h5 class="card-title">Total Files</h5>
+              <p class="card-text display-6">
+                {{ analytics_data.total_files }}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card info-card bg-success text-white">
+            <div class="card-body">
+              <h5 class="card-title">Processed Files</h5>
+              <p class="card-text display-6">
+                {{ analytics_data.processed_files }}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card info-card bg-warning text-dark">
+            <div class="card-body">
+              <h5 class="card-title">Average Match Score</h5>
+              <p class="card-text display-6">
+                {{ analytics_data.match_score_analysis.avg_score }}%
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card info-card bg-info text-white">
+            <div class="card-body">
+              <h5 class="card-title">Score Deviation</h5>
+              <p class="card-text display-6">
+                {{ analytics_data.match_score_analysis.score_deviation }}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Analytics Row -->
+      <div class="row g-4">
+        <!-- Verification Status Pie Chart -->
+        <div class="col-md-6">
+          <div class="card mb-4 h-100">
+            <div class="card-body">
+              <h5 class="card-title">Verification Status Distribution</h5>
+              <div class="chart-container">
+                <canvas id="verificationStatusChart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Score Ranges Bar Chart -->
+        <div class="col-md-6">
+          <div class="card mb-4 h-100">
+            <div class="card-body">
+              <h5 class="card-title">Match Score Ranges</h5>
+              <div class="chart-container">
+                <canvas id="scoreRangesChart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Additional Insights Row -->
+      <div class="row g-4">
+        <!-- Monthly Processing Trend -->
+        <div class="col-md-8">
+          <div class="card mb-4 h-100">
+            <div class="card-body">
+              <h5 class="card-title">Monthly Processing Trend</h5>
+              <div class="chart-container">
+                <canvas id="monthlyTrendChart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Field Matching Analysis -->
+        <div class="col-md-4">
+          <div class="card mb-4 h-100">
+            <div class="card-body">
+              <h5 class="card-title">Field Matching Accuracy</h5>
+              <table class="table">
+                <tbody>
+                  <tr>
+                    <td>Name Match</td>
+                    <td class="text-end text-success">
+                      {{ analytics_data.field_matching.avg_name_match }}%
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Address Match</td>
+                    <td class="text-end text-warning">
+                      {{ analytics_data.field_matching.avg_address_match }}%
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>UID Match</td>
+                    <td class="text-end text-primary">
+                      {{ analytics_data.field_matching.avg_uid_match }}%
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    <script>
+      // Verification Status Chart
+      function createVerificationStatusChart() {
+        const ctx = document.getElementById("verificationStatusChart").getContext("2d");
+        const labels = Object.keys({{ analytics_data.verification_stats | tojson | safe }});
+        const data = Object.values({{ analytics_data.verification_stats | tojson | safe }}).map(item => item.count);
+        const percentages = Object.values({{ analytics_data.verification_stats | tojson | safe }}).map(item => item.percentage);
+
+        new Chart(ctx, {
+          type: 'pie',
+          data: {
+            labels: labels,
+            datasets: [{
+              data: data,
+              backgroundColor: ['#36A2EB', '#FF6384', '#FFCE56']
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              datalabels: {
+                formatter: (value, context) => {
+                  return `${value} (${percentages[context.dataIndex]}%)`;
+                },
+                color: '#fff',
+                font: { weight: 'bold' }
+              },
+              legend: { position: 'top' }
+            }
+          }
+        });
+      }
+
+      // Score Ranges Chart
+      function createScoreRangesChart() {
+        const ctx = document.getElementById("scoreRangesChart").getContext("2d");
+        const labels = Object.keys({{ analytics_data.score_ranges | tojson | safe }});
+        const data = Object.values({{ analytics_data.score_ranges | tojson | safe }}).map(item => item.count);
+        const percentages = Object.values({{ analytics_data.score_ranges | tojson | safe }}).map(item => item.percentage);
+
+        new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Number of Documents',
+              data: data,
+              backgroundColor: '#4BC0C0'
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              datalabels: {
+                formatter: (value, context) => {
+                  return `${value} (${percentages[context.dataIndex]}%)`;
+                },
+                color: '#fff',
+                font: { weight: 'bold' }
+              },
+              legend: { display: false }
+            }
+          }
+        });
+      }
+
+      // Monthly Trend Chart
+      function createMonthlyTrendChart() {
+        const monthlyTrendData = {{ analytics_data.monthly_trend | tojson | safe }};
+        const months = [...new Set(monthlyTrendData.map(item => item.month))];
+        const acceptedData = months.map(month =>
+          monthlyTrendData.find(item => item.month === month && item.status === "Accepted")?.count || 0
+        );
+        const rejectedData = months.map(month =>
+          monthlyTrendData.find(item => item.month === month && item.status === "Rejected")?.count || 0
+        );
+
+        const ctx = document.getElementById("monthlyTrendChart").getContext("2d");
+        new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: months,
+            datasets: [
+              {
+                label: 'Accepted Documents',
+                data: acceptedData,
+                borderColor: '#36A2EB',
+                fill: false
+              },
+              {
+                label: 'Rejected Documents',
+                data: rejectedData,
+                borderColor: '#FF6384',
+                fill: false
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: { position: 'top' }
+            }
+          }
+        });
+      }
+
+      // Initialize charts
+      document.addEventListener('DOMContentLoaded', () => {
+        createVerificationStatusChart();
+        createScoreRangesChart();
+        createMonthlyTrendChart();
+      });
+    </script>
+  </body>
+</html>
