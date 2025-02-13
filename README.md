@@ -52,6 +52,9 @@ Real-time Feedback: Results are displayed after processing, indicating possible 
 
 ![Screenshot 2025-02-14 000826](https://github.com/user-attachments/assets/c067f79b-197e-4f61-ba09-498da4ddb2e5)
 
+OUTPUT IN EXCEL:
+User can also download the detection result in excel result like the percentage
+
 ![Screenshot 2025-02-14 000843](https://github.com/user-attachments/assets/d0f82b0c-ce23-4615-964d-122b217bd421)
 
 
