@@ -1,4 +1,4 @@
-**Fraud Management System**
+**FRAUD MANAGEMENT SYSTEM**
 
   This project was developed during the Infosys Springboard Internship to verify UID Aadhaar data using AI. The system leverages OCR, AI-based classification, and detection models to analyze Aadhaar documents and detect fraudulent activities.
 
@@ -12,10 +12,9 @@
 
 
 
+**Home Page Overview**
 
-**Home Page Overview
-
-Key Features:**
+**Key Features:**
 
   ✅ AI-powered fraud detection and document verification.
   
