@@ -34,7 +34,13 @@ The Upload Page allows users to submit Aadhaar-related documents for fraud detec
 
 Key functionalities include:
 
-File Upload: Users can upload documents for AI-based verification.
+Users upload two files:
+
+ZIP file: Contains Aadhaar card images.
+
+Excel file: Contains the reference database for verification.
+
+The system extracts the ZIP file, processes each Aadhaar image, and compares it with the data in the Excel file.
 
 AI Processing: The system applies OCR, classification, and detection models to analyze the document.
 
