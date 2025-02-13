@@ -276,7 +276,7 @@ with app.app_context():
 
 # Initialize Aadhaar verification system
 verifier = AadhaarVerificationSystem(
-    upload_folder="C:/Users/DEIVA RAJA/Documents/Infosys_Fraud_Detection/uploads",
+    upload_folder="C:/Users/DEIVA RAJA/Music/Flask Backend/uploads",
     classifier_path="C:/Users/DEIVA RAJA/runs/classify/train6/weights/best.pt",
     detector_path="C:/Users/DEIVA RAJA/runs/detect/train6/weights/best.pt"
 )
@@ -375,70 +375,79 @@ def analytics_dashboard():
 def index():
     return render_template('index.html')
 
-@app.route('/upload', methods=['POST'])
+@app.route('/upload', methods=['GET', 'POST'])
 def upload_files():
-    if 'zipfile' not in request.files or 'excelfile' not in request.files:
-        return jsonify({"error": "Both files are required."}), 400
+    if request.method == 'POST':
+        if 'zipfile' not in request.files or 'excelfile' not in request.files:
+            return jsonify({
+                "error": "Both files are required.",
+                "results": None
+            }), 400
 
-    zip_file = request.files['zipfile']
-    excel_file = request.files['excelfile']
+        zip_file = request.files['zipfile']
+        excel_file = request.files['excelfile']
 
-    zip_path = os.path.join(verifier.upload_folder, zip_file.filename)
-    excel_path = os.path.join(verifier.upload_folder, excel_file.filename)
+        zip_path = os.path.join(verifier.upload_folder, zip_file.filename)
+        excel_path = os.path.join(verifier.upload_folder, excel_file.filename)
 
-    os.makedirs(verifier.upload_folder, exist_ok=True)
-    zip_file.save(zip_path)
-    excel_file.save(excel_path)
+        os.makedirs(verifier.upload_folder, exist_ok=True)
+        zip_file.save(zip_path)
+        excel_file.save(excel_path)
 
-    try:
-        results = verifier.process_zip_file(zip_path, excel_path)
+        try:
+            results = verifier.process_zip_file(zip_path, excel_path)
 
-        # Store file details in the database
-        new_file = FileDetails(filename=zip_file.filename, status="Processed")
-        db.session.add(new_file)
-        db.session.commit()
+            # Store file details in the database
+            new_file = FileDetails(filename=zip_file.filename, status="Processed")
+            db.session.add(new_file)
+            db.session.commit()
 
-        # Store extracted details in the new table (only accepted files)
-        for result in results:
-            if 'match_results' in result:
-                for match in result['match_results']:
-                    overall_score = match.get('Overall Match Score')
-                    
-                    # Only store details if the overall match score is >= 70 (Accepted files)
-                    if overall_score >= 70:
-                        extracted_details = ExtractedDetails(
-                            filename=result['filename'],
-                            name=match.get('Extracted Name'),
-                            uid=match.get('UID'),
-                            address=match.get('Address Reference'),
-                            name_match_score=match.get('Name Match Score'),
-                            address_match_score=match.get('Address Match Score'),
-                            uid_match_score=match.get('UID Match Score'),
-                            overall_match_score=match.get('Overall Match Score'),
-                            status=match.get('status'),
-                            reason=match.get('reason')
-                        )
-                        db.session.add(extracted_details)
+            # Store extracted details in the database
+            for result in results:
+                if 'match_results' in result:
+                    for match in result['match_results']:
+                        overall_score = match.get('Overall Match Score')
+                        if overall_score >= 70:
+                            extracted_details = ExtractedDetails(
+                                filename=result['filename'],
+                                name=match.get('Extracted Name'),
+                                uid=match.get('UID'),
+                                address=match.get('Address Reference'),
+                                name_match_score=match.get('Name Match Score'),
+                                address_match_score=match.get('Address Match Score'),
+                                uid_match_score=match.get('UID Match Score'),
+                                overall_match_score=overall_score,
+                                status=match.get('status'),
+                                reason=match.get('reason')
+                            )
+                            db.session.add(extracted_details)
 
-                        # Add verification status (only Accepted)
-                        verification_entry = Verification(
-                            filename=result['filename'],
-                            status="Accepted"
-                        )
-                        db.session.add(verification_entry)
+                            verification_entry = Verification(
+                                filename=result['filename'],
+                                status="Accepted"
+                            )
+                            db.session.add(verification_entry)
 
-        db.session.commit()
+            db.session.commit()
 
-        return jsonify({"results": results})
-    except Exception as e:
-        return jsonify({"error": f"Error during processing: {str(e)}"}), 500
-    finally:
-        # Cleanup files
-        if os.path.exists(zip_path):
-            os.remove(zip_path)
-        if os.path.exists(excel_path):
-            os.remove(excel_path)
+            return jsonify({
+                "results": results,
+                "success": True
+            })
 
+        except Exception as e:
+            return jsonify({
+                "error": str(e),
+                "results": None
+            }), 500
+        finally:
+            if os.path.exists(zip_path):
+                os.remove(zip_path)
+            if os.path.exists(excel_path):
+                os.remove(excel_path)
+
+    # For GET requests, return the template
+    return render_template('upload.html')
 
 if __name__ == '__main__':
     app.run(debug=True)
