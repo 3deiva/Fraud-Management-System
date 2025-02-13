@@ -27,3 +27,5 @@ The below flowchart shows how the application works
 
 
 ![Screenshot 2025-02-14 000912](https://github.com/user-attachments/assets/f26f427b-5e13-40c0-9cc8-0a498fba1784)
+
+![Screenshot 2025-02-14 000933](https://github.com/user-attachments/assets/37f42a2e-3663-4548-a02e-70a3d4520088)
