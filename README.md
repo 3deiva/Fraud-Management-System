@@ -7,6 +7,14 @@ The below flowchart shows how the application works
 ![flowchart](https://github.com/user-attachments/assets/8394aa37-fe82-4175-80db-5dd98d9560e4)
 
 
+HOME PAGE:
+
+Key Features: AI-powered fraud detection, document verification, enhanced security, and user-friendly processing.
+
+Integration Possibilities: Seamless integration with government agencies, e-KYC providers, banks, and corporate HR.
+
+Navigation: Direct access to the Upload page for document submission and the Analytics page for insights.
+
 
 ![Screenshot 2025-02-14 001017](https://github.com/user-attachments/assets/6ad951ac-86d2-423e-938f-ddbef43f8e6d)
 
