@@ -7,6 +7,9 @@ The below flowchart shows how the application works
 ![flowchart](https://github.com/user-attachments/assets/8394aa37-fe82-4175-80db-5dd98d9560e4)
 
 
+
+
+
 HOME PAGE:
 
 Key Features: AI-powered fraud detection, document verification, enhanced security, and user-friendly processing.
