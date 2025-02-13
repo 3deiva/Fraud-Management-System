@@ -14,4 +14,3 @@ The below flowchart shows how the application works
 ![Screenshot 2025-02-14 001052](https://github.com/user-attachments/assets/7daaf070-3ba7-4f9a-af89-0d27dbbe4264)
 
 
-![Screenshot 2025-02-14 001052](https://github.com/user-attachments/assets/5fe462ed-b0f7-4ce5-816b-22e745c535b4)
