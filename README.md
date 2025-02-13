@@ -1,23 +1,29 @@
-# Fraud-Management-System
+Fraud Management System
+This project was developed during the Infosys Springboard Internship to verify UID Aadhaar data using AI. The system leverages OCR, AI-based classification, and detection models to analyze Aadhaar documents and detect fraudulent activities.
 
-This is a project to verify UID Aadhar Data using AI developed during Infosys Springboard Internship
 
-The below flowchart shows how the application works
-
+How It Works
+The following flowchart illustrates the application's workflow:
 ![flowchart](https://github.com/user-attachments/assets/8394aa37-fe82-4175-80db-5dd98d9560e4)
 
 
 
 
 
-HOME PAGE OVERVIEW:
+Home Page Overview
+Key Features:
+✅ AI-powered fraud detection and document verification.
+✅ Enhanced security measures to prevent identity fraud.
+✅ User-friendly and efficient document processing.
 
-Key Features: AI-powered fraud detection, document verification, enhanced security, and user-friendly processing.
+Integration Possibilities:
+✔ Seamless integration with government agencies, e-KYC providers, banks, and corporate HR systems for streamlined verification.
 
-Integration Possibilities: Seamless integration with government agencies, e-KYC providers, banks, and corporate HR.
+Navigation:
+🔹 Direct access to:
 
-Navigation: Direct access to the Upload page for document submission and the Analytics page for insights.
-
+Upload Page – Submit Aadhaar-related documents for verification.
+Analytics Page – View insights and fraud detection statistics.
 
 ![Screenshot 2025-02-14 001017](https://github.com/user-attachments/assets/6ad951ac-86d2-423e-938f-ddbef43f8e6d)
 
@@ -28,23 +34,21 @@ Navigation: Direct access to the Upload page for document submission and the Ana
 ![Screenshot 2025-02-14 001113](https://github.com/user-attachments/assets/d6934a50-254b-4e34-9750-9200b6826e9a)
 
 
-Upload Page OVERVIEW:
-
+Upload Page Overview
 The Upload Page allows users to submit Aadhaar-related documents for fraud detection and verification.
 
-Key functionalities include:
+Key Functionalities:
+📂 File Upload:
 
-Users upload two files:
+ZIP File: Contains multiple Aadhaar card images.
+Excel File: Serves as the reference database for verification.
+🔍 AI Processing:
 
-ZIP file: Contains Aadhaar card images.
+The system extracts Aadhaar details using OCR, AI-based classification, and detection models.
+It compares extracted data with the uploaded Excel file to detect inconsistencies.
+⚡ Real-Time Feedback:
 
-Excel file: Contains the reference database for verification.
-
-The system extracts the ZIP file, processes each Aadhaar image, and compares it with the data in the Excel file.
-
-AI Processing: The system applies OCR, classification, and detection models to analyze the document.
-
-Real-time Feedback: Results are displayed after processing, indicating possible fraud or verification status.
+Displays results after processing, indicating whether a document is verified or flagged as fraudulent.
 
 ![Screenshot 2025-02-14 000746](https://github.com/user-attachments/assets/4ac491ad-cac2-4337-919f-6d30f58aa8fe)
 
@@ -52,12 +56,26 @@ Real-time Feedback: Results are displayed after processing, indicating possible 
 
 ![Screenshot 2025-02-14 000826](https://github.com/user-attachments/assets/c067f79b-197e-4f61-ba09-498da4ddb2e5)
 
-OUTPUT IN EXCEL:
-User can also download the detection result in excel result like the percentage
+Excel Output
+Users can download the fraud detection results in an Excel report, which includes:
+
+Matching Percentage of Aadhaar details with the database.
+Flagging of potential fraud cases.
 
 ![Screenshot 2025-02-14 000843](https://github.com/user-attachments/assets/d0f82b0c-ce23-4615-964d-122b217bd421)
 
+Analytics Page Overview
+The Analytics Page provides visual insights into uploaded documents and their verification results.
+
+Features:
+📊 Document Upload Statistics – Track the number of uploaded Aadhaar documents.
+📈 Fraud Detection Analysis – Compare verified vs. flagged Aadhaar documents.
 
 ![Screenshot 2025-02-14 000912](https://github.com/user-attachments/assets/f26f427b-5e13-40c0-9cc8-0a498fba1784)
 
 ![Screenshot 2025-02-14 000933](https://github.com/user-attachments/assets/37f42a2e-3663-4548-a02e-70a3d4520088)
+
+
+Conclusion
+
+This AI-powered Fraud Management System enhances identity verification and fraud detection for Aadhaar documents. By integrating OCR, AI-based classification, and analytics, the system ensures high accuracy, efficiency, and security in document verification.
