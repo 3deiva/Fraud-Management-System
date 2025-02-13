@@ -10,7 +10,7 @@ The below flowchart shows how the application works
 
 
 
-HOME PAGE:
+HOME PAGE OVERVIEW:
 
 Key Features: AI-powered fraud detection, document verification, enhanced security, and user-friendly processing.
 
@@ -27,6 +27,18 @@ Navigation: Direct access to the Upload page for document submission and the Ana
 
 ![Screenshot 2025-02-14 001113](https://github.com/user-attachments/assets/d6934a50-254b-4e34-9750-9200b6826e9a)
 
+
+Upload Page OVERVIEW:
+
+The Upload Page allows users to submit Aadhaar-related documents for fraud detection and verification.
+
+Key functionalities include:
+
+File Upload: Users can upload documents for AI-based verification.
+
+AI Processing: The system applies OCR, classification, and detection models to analyze the document.
+
+Real-time Feedback: Results are displayed after processing, indicating possible fraud or verification status.
 
 ![Screenshot 2025-02-14 000746](https://github.com/user-attachments/assets/4ac491ad-cac2-4337-919f-6d30f58aa8fe)
 
