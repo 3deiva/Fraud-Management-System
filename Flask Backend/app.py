@@ -274,11 +274,14 @@ class Verification(db.Model):
 with app.app_context():
     db.create_all()
 
+    UPLOAD_FOLDER = os.path.join(os.getcwd(), 'uploads')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
 # Initialize Aadhaar verification system
 verifier = AadhaarVerificationSystem(
-    upload_folder="C:/Users/DEIVA RAJA/Music/Flask Backend/uploads",
-    classifier_path="C:/Users/DEIVA RAJA/runs/classify/train6/weights/best.pt",
-    detector_path="C:/Users/DEIVA RAJA/runs/detect/train6/weights/best.pt"
+    upload_folder=UPLOAD_FOLDER,
+    classifier_path=os.path.join(os.getcwd(), 'models', 'classifier.pt'),
+    detector_path=os.path.join(os.getcwd(), 'models', 'detector.pt')
 )
 
 @app.route('/analytics')
