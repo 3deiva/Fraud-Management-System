@@ -2,3 +2,4 @@ Flask
 yolov8
 easyocr
 Pillow
+gunicorn
