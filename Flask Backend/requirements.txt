@@ -1,5 +1,10 @@
-Flask
-yolov8
-easyocr
-Pillow
-gunicorn
+Flask==2.0.1
+Flask-SQLAlchemy==2.5.1
+ultralytics==8.0.0
+easyocr==1.7.0
+opencv-python-headless==4.8.0.74
+pandas==1.5.3
+fuzzywuzzy==0.18.0
+python-Levenshtein==0.12.2
+psycopg2-binary==2.9.5
+gunicorn==20.1.0
