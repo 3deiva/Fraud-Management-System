@@ -1,4 +1,3 @@
-<!--upload.html-->
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -19,6 +18,8 @@
         --primary-color: #2c3e50;
         --secondary-color: #3498db;
         --accent-color: #27ae60;
+        --error-color: #e74c3c;
+        --warning-color: #f39c12;
         --bg-light: #f4f6f7;
       }
       body {
@@ -33,19 +34,6 @@
       .card-custom:hover {
         transform: translateY(-5px);
         box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
-      }
-      .progress-custom {
-        height: 20px;
-        background-color: #e0e0e0;
-        border-radius: 10px;
-        overflow: hidden;
-      }
-      .progress-bar-custom {
-        background: linear-gradient(
-          45deg,
-          var(--secondary-color),
-          var(--accent-color)
-        );
       }
       .btn-upload {
         background: linear-gradient(
@@ -63,7 +51,6 @@
       }
       .table-hover tbody tr:hover {
         background-color: rgba(52, 152, 219, 0.1);
-        cursor: pointer;
       }
       .detail-row {
         background-color: #f9f9f9;
@@ -72,14 +59,41 @@
         font-weight: 600;
         padding: 0.375rem 0.75rem;
       }
+      .bg-accepted {
+        background-color: var(--accent-color) !important;
+      }
+      .bg-rejected {
+        background-color: var(--error-color) !important;
+      }
+      .bg-error {
+        background-color: var(--warning-color) !important;
+      }
       .search-container {
         background: white;
         border-radius: 8px;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
       }
-      #searchInput {
-        border: none;
-        background: transparent;
+      .score-indicator {
+        position: relative;
+        height: 4px;
+        background: #e9ecef;
+        margin-top: 5px;
+        border-radius: 2px;
+      }
+      .score-marker {
+        position: absolute;
+        width: 4px;
+        height: 8px;
+        background: #28a745;
+        top: -2px;
+      }
+      .threshold-line {
+        position: absolute;
+        width: 1px;
+        height: 10px;
+        background: #dc3545;
+        left: 70%;
+        top: -3px;
       }
       .sidebar-sticky {
         position: sticky;
@@ -90,6 +104,14 @@
         overflow-y: auto;
         background-color: var(--primary-color);
         color: white;
+      }
+      .process-step {
+        margin-bottom: 1.5rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid #eee;
+      }
+      .extracted-field {
+        margin-bottom: 0.5rem;
       }
     </style>
   </head>
@@ -131,6 +153,7 @@
                 <form id="uploadForm">
                   <div class="row">
                     <div class="col-md-6 mb-3">
+                      <label class="form-label">Aadhaar Images (ZIP)</label>
                       <div class="input-group">
                         <span class="input-group-text"
                           ><i class="bi bi-file-zip"></i
@@ -145,6 +168,7 @@
                       </div>
                     </div>
                     <div class="col-md-6 mb-3">
+                      <label class="form-label">Reference Data (Excel)</label>
                       <div class="input-group">
                         <span class="input-group-text"
                           ><i class="bi bi-file-spreadsheet"></i
@@ -230,27 +254,36 @@
         </main>
       </div>
     </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
       document
         .getElementById("uploadForm")
         .addEventListener("submit", async function (e) {
           e.preventDefault();
+
+          // Show loading indicator
           document.getElementById("processingIndicator").style.display =
             "block";
           document.getElementById("resultsContainer").style.display = "none";
 
-          const formData = new FormData();
-          formData.append(
-            "zipfile",
-            document.getElementById("zipfile").files[0]
-          );
-          formData.append(
-            "excelfile",
-            document.getElementById("excelfile").files[0]
-          );
+          // Disable submit button
+          const submitBtn = e.target.querySelector('button[type="submit"]');
+          submitBtn.disabled = true;
+          submitBtn.innerHTML =
+            '<i class="bi bi-hourglass me-2"></i>Processing...';
 
           try {
+            const formData = new FormData();
+            formData.append(
+              "zipfile",
+              document.getElementById("zipfile").files[0]
+            );
+            formData.append(
+              "excelfile",
+              document.getElementById("excelfile").files[0]
+            );
+
             const response = await fetch("/upload", {
               method: "POST",
               body: formData,
@@ -264,70 +297,335 @@
               );
             }
 
-            document.getElementById("processingIndicator").style.display =
-              "none";
-
             if (data.results) {
               displayResults(data.results);
             } else {
-              throw new Error(data.error || "No results returned from server");
+              throw new Error("No results returned from server");
             }
           } catch (error) {
             console.error("Error:", error);
+            showAlert(`Error: ${error.message}`, "danger");
+          } finally {
             document.getElementById("processingIndicator").style.display =
               "none";
-
-            // Show error message to user
-            const alertDiv = document.createElement("div");
-            alertDiv.className =
-              "alert alert-danger alert-dismissible fade show";
-            alertDiv.innerHTML = `
-            <strong>Error:</strong> ${error.message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        `;
-            document
-              .getElementById("uploadForm")
-              .insertAdjacentElement("afterend", alertDiv);
+            submitBtn.disabled = false;
+            submitBtn.innerHTML =
+              '<i class="bi bi-cloud-upload me-2"></i>Upload and Verify';
           }
         });
 
-      // Search functionality
-      document
-        .getElementById("searchInput")
-        .addEventListener("input", function () {
-          const searchTerm = this.value.toLowerCase();
-          const rows = document.querySelectorAll(
-            "#resultsTableBody tr:nth-child(odd)"
-          );
-          const detailRows = document.querySelectorAll(
-            "#resultsTableBody tr:nth-child(even)"
-          );
+      function showAlert(message, type) {
+        const alertDiv = document.createElement("div");
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show mt-3`;
+        alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      `;
+        document
+          .getElementById("uploadForm")
+          .insertAdjacentElement("afterend", alertDiv);
+      }
 
-          rows.forEach((row, index) => {
-            const filename = row
-              .querySelector("td:nth-child(2)")
-              .textContent.toLowerCase();
-            const match = filename.includes(searchTerm);
+      function displayResults(results) {
+        const resultsContainer = document.getElementById("resultsContainer");
+        const resultsTable = document.getElementById("resultsTableBody");
+        resultsTable.innerHTML = "";
 
-            row.style.display = match ? "" : "none";
-            detailRows[index].style.display = match ? "none" : "none";
-          });
+        // Store results for export
+        localStorage.setItem("verificationResults", JSON.stringify(results));
+
+        results.forEach((result, index) => {
+          const isAadhaar = result.is_aadhar === true || result.is_aadhar === 1;
+          const matchResult = result.match_results?.[0] || {};
+
+          // Determine status and reason
+          let status, statusClass, reason;
+          if (!isAadhaar) {
+            status = "Rejected";
+            statusClass = "bg-rejected";
+            reason = "Not an Aadhaar card";
+          } else if (matchResult.status === "Error") {
+            status = "Error";
+            statusClass = "bg-error";
+            reason = matchResult.reason || "Verification error";
+          } else {
+            status = matchResult.status || "Rejected";
+            statusClass = status === "Accepted" ? "bg-accepted" : "bg-rejected";
+            reason = matchResult.reason || "Verification failed";
+          }
+
+          // Main row
+          const mainRow = document.createElement("tr");
+          mainRow.innerHTML = `
+          <td>
+            <button class="btn btn-sm btn-info" onclick="toggleDetails(${index})">
+              <i class="bi bi-chevron-down"></i>
+            </button>
+          </td>
+          <td>${result.filename}</td>
+          <td>
+            <span class="badge ${statusClass} status-badge">${status}</span>
+            ${
+              status !== "Accepted"
+                ? `<div class="rejection-reason small">${reason}</div>`
+                : ""
+            }
+          </td>
+          <
+<td>${result.confidence ? (result.confidence * 100).toFixed(2) : "N/A"}%</td>
+         <td>
+  ${
+    matchResult["UID Match Score"] !== undefined &&
+    matchResult["UID Match Score"] !== null
+      ? `
+    ${matchResult["UID Match Score"].toFixed(2)}%
+    ${showScoreBar(matchResult["UID Match Score"])}
+    `
+      : "N/A"
+  }
+</td>
+<td>
+  ${
+    matchResult["Name Match Score"] !== undefined &&
+    matchResult["Name Match Score"] !== null
+      ? `
+    ${matchResult["Name Match Score"].toFixed(2)}%
+    ${showScoreBar(matchResult["Name Match Score"])}
+    `
+      : "N/A"
+  }
+</td>
+<td>
+  ${
+    matchResult["Address Match Score"] !== undefined &&
+    matchResult["Address Match Score"] !== null
+      ? `
+    ${matchResult["Address Match Score"].toFixed(2)}%
+    ${showScoreBar(matchResult["Address Match Score"])}
+    `
+      : "N/A"
+  }
+</td>
+<td>
+  ${
+    matchResult["Overall Match Score"] !== undefined &&
+    matchResult["Overall Match Score"] !== null
+      ? `
+    ${matchResult["Overall Match Score"].toFixed(2)}%
+    ${showScoreBar(matchResult["Overall Match Score"])}
+    `
+      : "N/A"
+  }
+</td>
+        `;
+
+          // Detail row
+          const detailRow = document.createElement("tr");
+          detailRow.className = "detail-row";
+          detailRow.id = `details-${index}`;
+          detailRow.style.display = "none";
+          detailRow.innerHTML = `
+          <td colspan="8">
+            <div class="p-3">
+              <h5>Processing Details: ${result.filename}</h5>
+              
+              <div class="process-step">
+                <h6>1. Classification Check</h6>
+                <p>Confidence: ${(result.confidence * 100).toFixed(2)}%</p>
+                <p>Result: ${
+                  isAadhaar ? "Valid Aadhaar Card" : "Not an Aadhaar Card"
+                }</p>
+                ${
+                  !isAadhaar
+                    ? `<p class="text-danger">Reason: ${reason}</p>`
+                    : ""
+                }
+              </div>
+
+              ${
+                isAadhaar
+                  ? `
+                <div class="process-step">
+                  <h6>2. Extracted Fields</h6>
+                  ${Object.entries(result.fields || {})
+                    .map(
+                      ([field, value]) => `
+                    <div class="extracted-field">
+                      <strong>${field}:</strong> ${
+                        value || '<span class="text-danger">Not detected</span>'
+                      }
+                    </div>
+                  `
+                    )
+                    .join("")}
+                </div>
+
+                <div class="process-step">
+                  <h6>3. Match Details</h6>
+                  ${
+                    status === "Error"
+                      ? `
+                    <div class="alert alert-danger">
+                      <strong>Error Details:</strong> ${reason}
+                      ${
+                        matchResult.extracted_uid
+                          ? `<p>Extracted UID: ${matchResult.extracted_uid}</p>`
+                          : ""
+                      }
+                      ${
+                        matchResult.sample_uids
+                          ? `<p>Sample UIDs in database: ${matchResult.sample_uids.join(
+                              ", "
+                            )}</p>`
+                          : ""
+                      }
+                    </div>
+                  `
+                      : ""
+                  }
+                  
+                  ${
+                    matchResult.status && matchResult.status !== "Error"
+                      ? `
+                    <div class="row">
+                      <div class="col-md-6">
+                        <h6>Extracted Data</h6>
+                        <p>Name: ${result.fields?.name || "Not detected"}</p>
+                        <p>UID: ${result.fields?.uid || "Not detected"}</p>
+                        <p>Address: ${
+                          result.fields?.address || "Not detected"
+                        }</p>
+                      </div>
+                      <div class="col-md-6">
+                        <h6>Reference Data</h6>
+                        <p>Name: ${matchResult.Name || "N/A"}</p>
+                        <p>UID: ${matchResult.UID || "N/A"}</p>
+                        ${
+                          matchResult["Address Reference"]
+                            ? `<p>Address: ${matchResult["Address Reference"]}</p>`
+                            : ""
+                        }
+                      </div>
+                    </div>
+                    <hr>
+                    <div class="match-scores">
+  <h6>Match Scores</h6>
+  <div class="row">
+    <div class="col-md-3">
+      <p>UID Match: ${
+        matchResult["UID Match Score"] != null
+          ? matchResult["UID Match Score"].toFixed(2)
+          : 0
+      }%</p>
+      ${showScoreBar(matchResult["UID Match Score"] || 0)}
+    </div>
+    <div class="col-md-3">
+      <p>Name Match: ${
+        matchResult["Name Match Score"] != null
+          ? matchResult["Name Match Score"].toFixed(2)
+          : 0
+      }%</p>
+      ${showScoreBar(matchResult["Name Match Score"] || 0)}
+    </div>
+    <div class="col-md-3">
+      <p>Address Match: ${
+        matchResult["Address Match Score"] != null
+          ? matchResult["Address Match Score"].toFixed(2)
+          : 0
+      }%</p>
+      ${showScoreBar(matchResult["Address Match Score"] || 0)}
+    </div>
+    <div class="col-md-3">
+      <p>Overall Match: ${
+        matchResult["Overall Match Score"] != null
+          ? matchResult["Overall Match Score"].toFixed(2)
+          : 0
+      }%</p>
+      ${showScoreBar(matchResult["Overall Match Score"] || 0)}
+    </div>
+  </div>
+</div>
+                  `
+                      : ""
+                  }
+                </div>
+              `
+                  : ""
+              }
+            </div>
+          </td>
+        `;
+
+          resultsTable.appendChild(mainRow);
+          resultsTable.appendChild(detailRow);
         });
 
-      function createDownloadButton() {
-        const downloadContainer = document.getElementById(
-          "downloadButtonContainer"
-        );
-        downloadContainer.innerHTML = `
-    <button class="btn btn-success download-btn" onclick="exportToExcel()">
-      Export Results to Excel
-    </button>
+        // Create download button
+        createDownloadButton();
+        resultsContainer.style.display = "block";
+      }
+
+      function showScoreBar(score) {
+        if (score === undefined || score === null) return "";
+        return `
+    <div class="score-indicator">
+      <div class="score-marker" style="left: ${score}%;"></div>
+      <div class="threshold-line"></div>
+    </div>
   `;
+      }
+      function createDownloadButton() {
+        const container = document.getElementById("downloadButtonContainer");
+        container.innerHTML = `
+        <button class="btn btn-success" onclick="exportToExcel()">
+          <i class="bi bi-download me-2"></i>Export Results
+        </button>
+      `;
       }
 
       function exportToExcel() {
-        const detailedResults = generateDetailedExportData();
-        const worksheet = XLSX.utils.json_to_sheet(detailedResults);
+        const results = JSON.parse(
+          localStorage.getItem("verificationResults") || "[]"
+        );
+        const exportData = results.map((result) => {
+          const matchResult = result.match_results?.[0] || {};
+          return {
+            Filename: result.filename,
+            Status:
+              matchResult.status || (result.is_aadhar ? "Error" : "Rejected"),
+            "Confidence (%)": result.confidence
+              ? (result.confidence * 100).toFixed(2)
+              : "0",
+            "Is Aadhaar": result.is_aadhar ? "Yes" : "No",
+            "Extracted Name": result.fields?.name || "Not detected",
+            "Extracted UID": result.fields?.uid || "Not detected",
+            "Extracted Address": result.fields?.address || "Not detected",
+            "Reference Name": matchResult.Name || "N/A",
+            "Reference UID": matchResult.UID || "N/A",
+            "Reference Address": matchResult["Address Reference"] || "N/A",
+            "UID Match Score (%)":
+              matchResult["UID Match Score"] != null
+                ? matchResult["UID Match Score"].toFixed(2)
+                : "0",
+            "Name Match Score (%)":
+              matchResult["Name Match Score"] != null
+                ? matchResult["Name Match Score"].toFixed(2)
+                : "0",
+            "Address Match Score (%)":
+              matchResult["Address Match Score"] != null
+                ? matchResult["Address Match Score"].toFixed(2)
+                : "0",
+            "Overall Match Score (%)":
+              matchResult["Overall Match Score"] != null
+                ? matchResult["Overall Match Score"].toFixed(2)
+                : "0",
+            "Verification Notes":
+              matchResult.reason ||
+              (result.is_aadhar ? "" : "Not an Aadhaar card"),
+          };
+        });
+
+        const worksheet = XLSX.utils.json_to_sheet(exportData);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(
           workbook,
@@ -337,299 +635,50 @@
         XLSX.writeFile(workbook, "aadhaar_verification_results.xlsx");
       }
 
-      function displayResults(results) {
-        localStorage.setItem("verificationResults", JSON.stringify(results));
-
-        const resultsContainer = document.getElementById("resultsContainer");
-        const resultsTable = document.getElementById("resultsTableBody");
-        resultsTable.innerHTML = "";
-
-        results.forEach((result, index) => {
-          // Debug logging
-          console.log(
-            `Filename: ${result.filename}, Is Aadhaar: ${result.is_aadhar}, Confidence: ${result.confidence}`
-          );
-
-          // Ensure correct classification interpretation
-          const is_aadhar = result.is_aadhar === true || result.is_aadhar === 1;
-
-          const mainRow = document.createElement("tr");
-          const status = result.match_results?.[0]?.status || "Rejected";
-          const reason =
-            result.match_results?.[0]?.reason ||
-            result.reason ||
-            "Unknown reason";
-
-          mainRow.innerHTML = `
-            <td>
-                <button class="btn btn-sm btn-info" onclick="toggleDetails(${index})">
-                    <i class="bi bi-chevron-down"></i>
-                </button>
-            </td>
-            <td>${result.filename}</td>
-            <td>
-                <div>
-                    <span class="badge ${
-                      status === "Accepted" ? "bg-success" : "bg-danger"
-                    }">${status}</span>
-                    ${
-                      status === "Rejected"
-                        ? `<div class="rejection-reason small">Reason: ${reason}</div>`
-                        : ""
-                    }
-                </div>
-            </td>
-            <td>${(result.confidence * 100).toFixed(2)}%</td>
-            <td>
-                <div>
-                    ${
-                      result.match_results?.[0]?.["UID Match Score"]?.toFixed(
-                        2
-                      ) || "N/A"
-                    }%
-                    ${showScoreBar(
-                      result.match_results?.[0]?.["UID Match Score"]
-                    )}
-                </div>
-            </td>
-            <td>
-                <div>
-                    ${
-                      result.match_results?.[0]?.["Name Match Score"]?.toFixed(
-                        2
-                      ) || "N/A"
-                    }%
-                    ${showScoreBar(
-                      result.match_results?.[0]?.["Name Match Score"]
-                    )}
-                </div>
-            </td>
-            <td>
-                <div>
-                    ${
-                      result.match_results?.[0]?.[
-                        "Address Match Score"
-                      ]?.toFixed(2) || "N/A"
-                    }%
-                    ${showScoreBar(
-                      result.match_results?.[0]?.["Address Match Score"]
-                    )}
-                </div>
-            </td>
-            <td>
-                <div>
-                    ${
-                      result.match_results?.[0]?.[
-                        "Overall Match Score"
-                      ]?.toFixed(2) || "N/A"
-                    }%
-                    ${showScoreBar(
-                      result.match_results?.[0]?.["Overall Match Score"]
-                    )}
-                </div>
-            </td>
-        `;
-
-          const detailRow = document.createElement("tr");
-          detailRow.className = "detail-row";
-          detailRow.id = `details-${index}`;
-          detailRow.innerHTML = `
-            <td colspan="8">
-                <div class="p-3">
-                    <h5>Processing Steps:</h5>
-                    
-                    <div class="process-step">
-                        <h6>1. Classification Check</h6>
-                        <p>Confidence: ${(result.confidence * 100).toFixed(
-                          2
-                        )}%</p>
-                        <p>Result: ${
-                          is_aadhar
-                            ? "Valid Aadhaar Card"
-                            : "Not an Aadhaar Card"
-                        }</p>
-                        ${
-                          !is_aadhar
-                            ? `<p class="rejection-reason">Reason: Document not recognized as Aadhaar card</p>`
-                            : ""
-                        }
-                    </div>
-
-                    <div class="process-step">
-                        <h6>2. Extracted Fields</h6>
-                        ${Object.entries(result.fields || {})
-                          .map(
-                            ([field, value]) => `
-                                <div class="extracted-field">
-                                    <strong>${field}:</strong> ${
-                              value ||
-                              `<span class="text-danger">Not detected (Potential reason for rejection)</span>`
-                            }
-                                </div>
-                            `
-                          )
-                          .join("")}
-                    </div>
-
-                    <div class="process-step">
-                        <h6>3. Match Details</h6>
-                        <div class="match-details">
-                            ${
-                              result.match_results?.[0]
-                                ? `
-                                <p><strong>Reference Record:</strong></p>
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <h6>Extracted Data</h6>
-                                        <p>Name: ${
-                                          result.fields?.name || "Not detected"
-                                        }</p>
-                                        <p>UID: ${
-                                          result.fields?.uid || "Not detected"
-                                        }</p>
-                                        <p>Address: ${
-                                          result.fields?.address ||
-                                          "Not detected"
-                                        }</p>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <h6>Reference Data</h6>
-                                        <p>Name: ${
-                                          result.match_results[0].Name || "N/A"
-                                        }</p>
-                                        <p>UID: ${
-                                          result.match_results[0].UID || "N/A"
-                                        }</p>
-                                    </div>
-                                </div>
-                                <hr>
-                                <p><strong>Match Scores:</strong></p>
-                                <ul>
-                                    <li>UID Match: ${
-                                      result.match_results[0][
-                                        "UID Match Score"
-                                      ]?.toFixed(2) || "N/A"
-                                    }%
-                                        ${showScoreBar(
-                                          result.match_results[0][
-                                            "UID Match Score"
-                                          ]
-                                        )}
-                                    </li>
-                                    <li>Name Match: ${
-                                      result.match_results[0][
-                                        "Name Match Score"
-                                      ]?.toFixed(2) || "N/A"
-                                    }%
-                                        ${showScoreBar(
-                                          result.match_results[0][
-                                            "Name Match Score"
-                                          ]
-                                        )}
-                                    </li>
-                                    <li>Address Match: ${
-                                      result.match_results[0][
-                                        "Address Match Score"
-                                      ]?.toFixed(2) || "N/A"
-                                    }%
-                                        ${showScoreBar(
-                                          result.match_results[0][
-                                            "Address Match Score"
-                                          ]
-                                        )}
-                                    </li>
-                                </ul>
-                                ${
-                                  status === "Rejected"
-                                    ? `
-                                    <div class="alert alert-danger mt-3">
-                                        <strong>Rejection Reason:</strong> ${reason}
-                                    </div>
-                                `
-                                    : ""
-                                }
-                            `
-                                : `
-                                <div class="alert alert-danger">
-                                    No matching record found. Possible reasons:
-                                    <ul>
-                                        <li>UID not found in reference database</li>
-                                        <li>Extracted data quality issues</li>
-                                        <li>Document might be fraudulent</li>
-                                    </ul>
-                                </div>
-                            `
-                            }
-                        </div>
-                        </div>
-                </div>
-            </td>
-        `;
-
-          resultsTable.appendChild(mainRow);
-          resultsTable.appendChild(detailRow);
-        });
-
-        resultsContainer.style.display = "block";
-        createDownloadButton();
-        resultsContainer.style.display = "block";
-      }
-
-      function showScoreBar(score) {
-        if (!score) return "";
-        return `
-                <div class="score-indicator">
-                    <div class="score-marker" style="left: ${score}%;"></div>
-                    <div class="threshold-line"></div>
-                </div>
-            `;
-      }
-
-      function generateDetailedExportData() {
-        const detailedResults = [];
-        const results = JSON.parse(
-          localStorage.getItem("verificationResults") || "[]"
-        );
-
-        results.forEach((result) => {
-          const matchResult = result.match_results?.[0] || {};
-
-          detailedResults.push({
-            Filename: result.filename,
-            "Is Aadhaar": result.is_aadhar,
-            "Confidence (%)": (result.confidence * 100).toFixed(2),
-            Status: matchResult.status || "Rejected",
-            "Extracted Name": result.fields?.name || "Not Detected",
-            "Extracted UID": result.fields?.uid || "Not Detected",
-            "Extracted Address": result.fields?.address || "Not Detected",
-            "Reference Name": matchResult.Name || "N/A",
-            "Reference UID": matchResult.UID || "N/A",
-            "UID Match Score (%)":
-              matchResult["UID Match Score"]?.toFixed(2) || "N/A",
-            "Name Match Score (%)":
-              matchResult["Name Match Score"]?.toFixed(2) || "N/A",
-            "Address Match Score (%)":
-              matchResult["Address Match Score"]?.toFixed(2) || "N/A",
-            "Overall Match Score (%)":
-              matchResult["Overall Match Score"]?.toFixed(2) || "N/A",
-          });
-        });
-
-        return detailedResults;
-      }
-
       function toggleDetails(index) {
         const detailRow = document.getElementById(`details-${index}`);
+        if (!detailRow) return;
+
+        const isHidden = detailRow.style.display === "none";
+        detailRow.style.display = isHidden ? "table-row" : "none";
+
         const button = document.querySelector(
           `button[onclick="toggleDetails(${index})"] i`
         );
-        if (detailRow) {
-          const isHidden =
-            detailRow.style.display === "none" || !detailRow.style.display;
-          detailRow.style.display = isHidden ? "table-row" : "none";
-          button.className = `bi bi-chevron-${isHidden ? "up" : "down"}`;
+        if (button) {
+          button.className = isHidden
+            ? "bi bi-chevron-up"
+            : "bi bi-chevron-down";
         }
       }
+
+      // Search functionality
+      document
+        .getElementById("searchInput")
+        .addEventListener("input", function () {
+          const searchTerm = this.value.toLowerCase();
+          const rows = document.querySelectorAll(
+            "#resultsTableBody tr:nth-child(odd)"
+          );
+
+          rows.forEach((row) => {
+            const filename = row
+              .querySelector("td:nth-child(2)")
+              .textContent.toLowerCase();
+            row.style.display = filename.includes(searchTerm) ? "" : "none";
+
+            // Hide corresponding detail row
+            const rowIndex = Array.from(row.parentNode.children).indexOf(row);
+            const detailRow = document.getElementById(
+              `details-${rowIndex / 2}`
+            );
+            if (detailRow) {
+              detailRow.style.display = "none";
+              const button = row.querySelector("button i");
+              if (button) button.className = "bi bi-chevron-down";
+            }
+          });
+        });
     </script>
   </body>
 </html>
