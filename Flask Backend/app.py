@@ -1,7 +1,6 @@
 import os
 import zipfile
 from flask import Flask, request, jsonify, render_template
-from flask_sqlalchemy import SQLAlchemy
 from ultralytics import YOLO
 from easyocr import Reader
 import cv2
@@ -9,20 +8,16 @@ import pandas as pd
 from fuzzywuzzy import fuzz
 import re
 from datetime import datetime
+from pymongo import MongoClient
+from werkzeug.utils import secure_filename
+from bson import ObjectId
 
 # Flask application setup
 app = Flask(__name__)
 
-# Set up PostgreSQL URI
-database_url = os.getenv('DATABASE_URL')
-if database_url and database_url.startswith("postgres://"):
-    database_url = database_url.replace("postgres://", "postgresql://", 1)
-
-app.config['SQLALCHEMY_DATABASE_URI'] = database_url
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy(app)
-
-
+app.config['MONGO_URI'] = os.environ.get('MONGO_URI', 'mongodb://localhost:27017/aadhaar_verification')
+mongo_client = MongoClient(app.config['MONGO_URI'])
+db = mongo_client.get_database() # This will now use 'aadhaar_verification' database
 
 class AadhaarVerificationSystem:
     def __init__(self, upload_folder, classifier_path, detector_path):
@@ -141,20 +136,60 @@ class AadhaarVerificationSystem:
 
     def compare_with_excel(self, fields, excel_path):
         try:
-            excel_data = pd.read_excel(excel_path)
+            # Debug: Print Excel file path
+            print(f"\n[DEBUG] Reading Excel file from: {excel_path}")
+            
+            # Check if file exists
+            if not os.path.exists(excel_path):
+                return [{
+                    "status": "Error",
+                    "reason": "Excel file not found at specified path",
+                    "file_path": excel_path
+                }]
+
+            # Read Excel file
+            try:
+                excel_data = pd.read_excel(excel_path)
+                print("[DEBUG] Excel file read successfully")
+                print(f"[DEBUG] Columns found: {excel_data.columns.tolist()}")
+            except Exception as e:
+                return [{
+                    "status": "Error",
+                    "reason": f"Failed to read Excel file: {str(e)}",
+                    "file_path": excel_path
+                }]
+
+            # Check required columns
+            required_columns = ['UID', 'Name']
+            missing_columns = [col for col in required_columns if col not in excel_data.columns]
+            if missing_columns:
+                return [{
+                    "status": "Error",
+                    "reason": f"Missing required columns in Excel: {', '.join(missing_columns)}",
+                    "available_columns": excel_data.columns.tolist()
+                }]
+
             uid = fields.get("uid")
             extracted_name = fields.get("name", "N/A")
             extracted_address = fields.get("address")
 
             if not uid:
-                return [{"status": "Rejected", "reason": "UID not found in image."}]  # For rejected files
+                return [{"status": "Rejected", "reason": "UID not found in image."}]
 
             uid_cleaned = self.clean_uid(uid)
             best_match = None
             highest_score = 0
 
+            # Debug: Print first few UIDs from Excel
+            print(f"[DEBUG] First 5 UIDs from Excel: {excel_data['UID'].head().tolist()}")
+            print(f"[DEBUG] Extracted UID: {uid_cleaned}")
+
             for _, row in excel_data.iterrows():
-                excel_uid_cleaned = self.clean_uid(row.get("UID", ""))
+                # Skip rows with empty UID
+                if pd.isna(row.get("UID")):
+                    continue
+                    
+                excel_uid_cleaned = self.clean_uid(str(row.get("UID", "")))
 
                 name_score = 0
                 if extracted_name != "N/A":
@@ -195,8 +230,18 @@ class AadhaarVerificationSystem:
                     }
 
             if best_match is None:
-                return [{"status": "Rejected", "reason": "No matching record found."}]  # For rejected files
-
+                
+                # Change this in the compare_with_excel method
+                return [{
+                    "status": "Rejected",
+                    "reason": "No matching UID found in database",
+                    "Extracted Name": extracted_name,
+                    "Extracted UID": uid_cleaned,
+                    "UID Match Score": 0,  # Changed from None to 0
+                    "Name Match Score": 0,
+                    "Address Match Score": 0,
+                    "Overall Match Score": 0
+                }]
             return [best_match]
 
         except Exception as e:
@@ -211,7 +256,7 @@ class AadhaarVerificationSystem:
 
             for root, _, files in os.walk(self.extract_folder):
                 for file in files:
-                    if file.lower().endswith(('.png', '.jpg', '.jpeg')):  # Process image files only
+                    if file.lower().endswith(('.png', '.jpg', '.jpeg')):
                         image_path = os.path.join(root, file)
                         is_aadhar, confidence = self.is_aadhaar_card(image_path)
 
@@ -239,140 +284,143 @@ class AadhaarVerificationSystem:
             print(f"Zip processing error: {str(e)}")
             raise
 
-
-# Database model for storing file details
-class FileDetails(db.Model):
-    __tablename__ = 'file_details'
-    id = db.Column(db.Integer, primary_key=True)
-    filename = db.Column(db.String(255), nullable=False)
-    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
-    processed_at = db.Column(db.DateTime, nullable=True)
-    status = db.Column(db.String(50), nullable=False)
-
-
-# Database model for storing extracted details and matching scores
-class ExtractedDetails(db.Model):
-    __tablename__ = 'extracted_details'
-    id = db.Column(db.Integer, primary_key=True)
-    filename = db.Column(db.String(255), nullable=False)
-    name = db.Column(db.String(255))
-    uid = db.Column(db.String(255))
-    address = db.Column(db.String(255))
-    name_match_score = db.Column(db.Integer)
-    address_match_score = db.Column(db.Integer)
-    uid_match_score = db.Column(db.Integer)
-    overall_match_score = db.Column(db.Integer)
-    status = db.Column(db.String(50))
-    reason = db.Column(db.String(255))
-    processed_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-
-# Database model for storing verification results (Accepted/Rejected status)
-class Verification(db.Model):
-    __tablename__ = 'verification'
-    id = db.Column(db.Integer, primary_key=True)
-    filename = db.Column(db.String(255), nullable=False)
-    status = db.Column(db.String(50), nullable=False)
-    processed_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-
-# Create tables automatically if they don't exist
-with app.app_context():
-    db.create_all()
-
-    UPLOAD_FOLDER = os.path.join(os.getcwd(), 'uploads')
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
 # Initialize Aadhaar verification system
 verifier = AadhaarVerificationSystem(
-    upload_folder=UPLOAD_FOLDER,
-    classifier_path=os.path.join(os.getcwd(), 'models', 'classifier.pt'),
-    detector_path=os.path.join(os.getcwd(), 'models', 'detector.pt')
+   upload_folder = os.environ.get('UPLOAD_FOLDER', 'uploads'),
+   classifier_path = os.environ.get('CLASSIFIER_PATH', 'models/classifier.pt'),
+   detector_path = os.environ.get('DETECTOR_PATH', 'models/detector.pt')
 )
 
 @app.route('/analytics')
 def analytics_dashboard():
     try:
         # 1. Overall Verification Statistics
-        total_files = FileDetails.query.count()
-        processed_files = FileDetails.query.filter_by(status="Processed").count()
+        total_files = db.file_details.count_documents({})
+        processed_files = db.file_details.count_documents({"status": "Processed"})
         
-        # 2. Verification Status Distribution with more detailed breakdown
-        verification_stats = db.session.query(
-            Verification.status, 
-            db.func.count(Verification.id).label('count'),
-            db.func.round(100.0 * db.func.count(Verification.id) / total_files, 2).label('percentage')
-        ).group_by(Verification.status).all()
+        # 2. Verification Status Distribution
+        verification_stats = list(db.verification.aggregate([
+            {"$group": {
+                "_id": "$status",
+                "count": {"$sum": 1},
+                "percentage": {
+                    "$avg": {
+                        "$cond": [
+                            {"$eq": [1, 1]},  # Always true to calculate percentage
+                            {"$multiply": [{"$divide": [100, total_files]}, 1]},
+                            0
+                        ]
+                    }
+                }
+            }},
+            {"$project": {
+                "status": "$_id",
+                "count": 1,
+                "percentage": {"$round": ["$percentage", 2]}
+            }}
+        ]))
         
-        # 3. Enhanced Match Score Analysis
-        match_score_analysis = db.session.query(
-            db.func.min(ExtractedDetails.overall_match_score).label('min_score'),
-            db.func.max(ExtractedDetails.overall_match_score).label('max_score'),
-            db.func.avg(ExtractedDetails.overall_match_score).label('avg_score'),
-            db.func.stddev(ExtractedDetails.overall_match_score).label('score_deviation')
-        ).first()
+        # 3. Match Score Analysis
+        match_score_analysis = db.extracted_details.aggregate([
+            {"$group": {
+                "_id": None,
+                "min_score": {"$min": "$overall_match_score"},
+                "max_score": {"$max": "$overall_match_score"},
+                "avg_score": {"$avg": "$overall_match_score"},
+                "score_deviation": {"$stdDevPop": "$overall_match_score"}
+            }}
+        ]).next()
         
-        # 4. Detailed Score Range Distribution
-        score_ranges = db.session.query(
-            db.case(
-                (ExtractedDetails.overall_match_score < 50, 'Low Match (0-50)'),
-                (ExtractedDetails.overall_match_score.between(50, 70), 'Moderate Match (50-70)'),
-                (ExtractedDetails.overall_match_score.between(70, 85), 'Good Match (70-85)'),
-                (ExtractedDetails.overall_match_score >= 85, 'Excellent Match (85-100)')
-            , else_='Unknown').label('score_range'),
-            db.func.count(ExtractedDetails.id).label('count'),
-            db.func.round(100.0 * db.func.count(ExtractedDetails.id) / total_files, 2).label('percentage')
-        ).group_by('score_range').all()
+        # 4. Score Range Distribution
+        score_ranges = list(db.extracted_details.aggregate([
+            {"$bucket": {
+                "groupBy": "$overall_match_score",
+                "boundaries": [0, 50, 70, 85, 100],
+                "default": "Unknown",
+                "output": {
+                    "count": {"$sum": 1},
+                    "percentage": {
+                        "$avg": {
+                            "$multiply": [{"$divide": [100, total_files]}, 1]
+                        }
+                    }
+                }
+            }},
+            {"$project": {
+                "score_range": {
+                    "$switch": {
+                        "branches": [
+                            {"case": {"$lt": ["$_id", 50]}, "then": "Low Match (0-50)"},
+                            {"case": {"$and": [
+                                {"$gte": ["$_id", 50]},
+                                {"$lt": ["$_id", 70]}
+                            ]}, "then": "Moderate Match (50-70)"},
+                            {"case": {"$and": [
+                                {"$gte": ["$_id", 70]},
+                                {"$lt": ["$_id", 85]}
+                            ]}, "then": "Good Match (70-85)"},
+                            {"case": {"$gte": ["$_id", 85]}, "then": "Excellent Match (85-100)"}
+                        ],
+                        "default": "Unknown"
+                    }
+                },
+                "count": 1,
+                "percentage": {"$round": ["$percentage", 2]}
+            }}
+        ]))
         
-        # 5. Enhanced Monthly Processing Trend
-        monthly_trend = db.session.query(
-            db.func.date_trunc('month', Verification.processed_at).label('month'),
-            Verification.status,
-            db.func.count(Verification.id).label('count'),
-            db.func.round(100.0 * db.func.count(Verification.id) / total_files, 2).label('percentage')
-        ).group_by('month', Verification.status).order_by('month').all()
+        # 5. Monthly Processing Trend
+        monthly_trend = list(db.verification.aggregate([
+            {"$project": {
+                "month": {"$dateToString": {"format": "%Y-%m", "date": "$processed_at"}},
+                "status": 1
+            }},
+            {"$group": {
+                "_id": {"month": "$month", "status": "$status"},
+                "count": {"$sum": 1},
+                "percentage": {
+                    "$avg": {
+                        "$multiply": [{"$divide": [100, total_files]}, 1]
+                    }
+                }
+            }},
+            {"$project": {
+                "month": "$_id.month",
+                "status": "$_id.status",
+                "count": 1,
+                "percentage": {"$round": ["$percentage", 2]}
+            }},
+            {"$sort": {"month": 1}}
+        ]))
         
         # 6. Field-level Matching Analysis
-        field_matching = db.session.query(
-            db.func.avg(ExtractedDetails.name_match_score).label('avg_name_match'),
-            db.func.avg(ExtractedDetails.address_match_score).label('avg_address_match'),
-            db.func.avg(ExtractedDetails.uid_match_score).label('avg_uid_match')
-        ).first()
+        field_matching = db.extracted_details.aggregate([
+            {"$group": {
+                "_id": None,
+                "avg_name_match": {"$avg": "$name_match_score"},
+                "avg_address_match": {"$avg": "$address_match_score"},
+                "avg_uid_match": {"$avg": "$uid_match_score"}
+            }}
+        ]).next()
         
-        # Prepare comprehensive data for template rendering
+        # Prepare data for template
         analytics_data = {
             'total_files': total_files,
             'processed_files': processed_files,
-            'verification_stats': {
-                row.status: {
-                    'count': row.count, 
-                    'percentage': row.percentage
-                } for row in verification_stats
+            'verification_stats': {stat['status']: stat for stat in verification_stats},
+            # Before passing data to template, ensure no null values
+            'match_score_analysis':{
+                'min_score': match_score_analysis.get('min_score') or 0,
+                'max_score': match_score_analysis.get('max_score') or 0,
+                'avg_score': round(match_score_analysis.get('avg_score') or 0, 2),
+                'score_deviation': round(match_score_analysis.get('score_deviation') or 0, 2)
             },
-            'match_score_analysis': {
-                'min_score': match_score_analysis.min_score,
-                'max_score': match_score_analysis.max_score,
-                'avg_score': round(match_score_analysis.avg_score, 2),
-                'score_deviation': round(match_score_analysis.score_deviation, 2)
-            },
-            'score_ranges': {
-                row.score_range: {
-                    'count': row.count, 
-                    'percentage': row.percentage
-                } for row in score_ranges
-            },
-            'monthly_trend': [
-                {
-                    'month': row.month.strftime('%Y-%m'),
-                    'status': row.status,
-                    'count': row.count,
-                    'percentage': row.percentage
-                } for row in monthly_trend
-            ],
+            'score_ranges': {range['score_range']: range for range in score_ranges},
+            'monthly_trend': monthly_trend,
             'field_matching': {
-                'avg_name_match': round(field_matching.avg_name_match, 2),
-                'avg_address_match': round(field_matching.avg_address_match, 2),
-                'avg_uid_match': round(field_matching.avg_uid_match, 2)
+                'avg_name_match': round(field_matching['avg_name_match'], 2),
+                'avg_address_match': round(field_matching['avg_address_match'], 2),
+                'avg_uid_match': round(field_matching['avg_uid_match'], 2)
             }
         }
         
@@ -380,6 +428,7 @@ def analytics_dashboard():
     
     except Exception as e:
         return jsonify({"error": f"Analytics generation error: {str(e)}"}), 500
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -388,16 +437,16 @@ def index():
 def upload_files():
     if request.method == 'POST':
         if 'zipfile' not in request.files or 'excelfile' not in request.files:
-            return jsonify({
-                "error": "Both files are required.",
-                "results": None
-            }), 400
+            return jsonify({"error": "Both files are required."}), 400
 
         zip_file = request.files['zipfile']
         excel_file = request.files['excelfile']
 
-        zip_path = os.path.join(verifier.upload_folder, zip_file.filename)
-        excel_path = os.path.join(verifier.upload_folder, excel_file.filename)
+        zip_filename = secure_filename(zip_file.filename)
+        excel_filename = secure_filename(excel_file.filename)
+        
+        zip_path = os.path.join(verifier.upload_folder, zip_filename)
+        excel_path = os.path.join(verifier.upload_folder, excel_filename)
 
         os.makedirs(verifier.upload_folder, exist_ok=True)
         zip_file.save(zip_path)
@@ -406,78 +455,60 @@ def upload_files():
         try:
             results = verifier.process_zip_file(zip_path, excel_path)
 
-            # Store file details in the database
-            new_file = FileDetails(filename=zip_file.filename, status="Processed")
-            db.session.add(new_file)
-            db.session.commit()
+            # Store file details in MongoDB
+            db.file_details.insert_one({
+                "filename": zip_filename,
+                "uploaded_at": datetime.utcnow(),
+                "processed_at": datetime.utcnow(),
+                "status": "Processed"
+            })
 
-            # Store extracted details in the database
+            # Store extracted details and verification results
             for result in results:
                 if 'match_results' in result:
                     for match in result['match_results']:
                         overall_score = match.get('Overall Match Score')
-                        if overall_score >= 70:
-                            extracted_details = ExtractedDetails(
-                                filename=result['filename'],
-                                name=match.get('Extracted Name'),
-                                uid=match.get('UID'),
-                                address=match.get('Address Reference'),
-                                name_match_score=match.get('Name Match Score'),
-                                address_match_score=match.get('Address Match Score'),
-                                uid_match_score=match.get('UID Match Score'),
-                                overall_match_score=overall_score,
-                                status=match.get('status'),
-                                reason=match.get('reason')
-                            )
-                            db.session.add(extracted_details)
+                        
+                        if overall_score is not None and overall_score >= 70:
+                            # Store extracted details
+                            db.extracted_details.insert_one({
+                                "filename": result['filename'],
+                                "name": match.get('Extracted Name'),
+                                "uid": match.get('UID'),
+                                "address": match.get('Address Reference'),
+                                "name_match_score": match.get('Name Match Score'),
+                                "address_match_score": match.get('Address Match Score'),
+                                "uid_match_score": match.get('UID Match Score'),
+                                "overall_match_score": match.get('Overall Match Score'),
+                                "status": match.get('status'),
+                                "reason": match.get('reason'),
+                                "processed_at": datetime.utcnow()
+                            })
 
-                            verification_entry = Verification(
-                                filename=result['filename'],
-                                status="Accepted"
-                            )
-                            db.session.add(verification_entry)
+                            # Store verification status
+                            db.verification.insert_one({
+                                "filename": result['filename'],
+                                "status": "Accepted",
+                                "processed_at": datetime.utcnow()
+                            })
+                        elif overall_score is not None and overall_score < 70:
+                            db.verification.insert_one({
+                                "filename": result['filename'],
+                                "status": "Rejected",
+                                "reason": match.get('reason', "Low match score"),
+                                "processed_at": datetime.utcnow()
+                            })
 
-            db.session.commit()
-
-            return jsonify({
-                "results": results,
-                "success": True
-            })
-
+            return jsonify({"results": results})
         except Exception as e:
-            return jsonify({
-                "error": str(e),
-                "results": None
-            }), 500
+            return jsonify({"error": f"Error during processing: {str(e)}"}), 500
         finally:
             if os.path.exists(zip_path):
                 os.remove(zip_path)
             if os.path.exists(excel_path):
                 os.remove(excel_path)
-
-    # For GET requests, return the template
-    return render_template('upload.html')
+    else:
+        return render_template('upload.html')
 
 if __name__ == '__main__':
     app.run(debug=True)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
